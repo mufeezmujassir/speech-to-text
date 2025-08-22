@@ -1,0 +1,10 @@
+# Ignore dataset
+datasets/data_extracted/LJSpeech-1.1/wavs/
+datasets/data_extracted/LJSpeech-1.1/data.tar.gz
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore Jupyter temp files
+.ipynb_checkpoints/
