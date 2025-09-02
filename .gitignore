@@ -1,6 +1,10 @@
 # Ignore dataset
 datasets/data_extracted/LJSpeech-1.1/wavs/
 datasets/data_extracted/LJSpeech-1.1/data.tar.gz
+datasets/data_extracted/LJSpeech-1.2/wavs/
+datasets/data_extracted/LJSpeech-1.2/data.tar.gz
+datasets/data_extracted/LJSpeech-1.3/wavs/
+datasets/data_extracted/LJSpeech-1.3/data.tar.gz
 
 # Ignore Python cache
 __pycache__/
