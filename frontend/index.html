@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceCanvas - Speech-to-Text App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'voice-blue': '#6366f1',
+                        'voice-purple': '#8b5cf6',
+                        'voice-pink': '#ec4899',
+                        'voice-dark': '#1e293b',
+                        'voice-light': '#f8fafc'
+                    },
+                    fontFamily: {
+                        'poppins': ['Poppins', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+        }
+        
+        .voice-wave {
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320'%3E%3Cpath fill='%23ffffff' fill-opacity='0.2' d='M0,96L48,112C96,128,192,160,288,186.7C384,213,480,235,576,213.3C672,192,768,128,864,128C960,128,1056,192,1152,192C1248,192,1344,128,1392,96L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'%3E%3C/path%3E%3C/svg%3E");
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .audio-wave {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 40px;
+            gap: 4px;
+        }
+        
+        .bar {
+            width: 4px;
+            height: 10px;
+            background-color: #8b5cf6;
+            border-radius: 2px;
+            animation: audioWave 1.5s infinite ease-in-out;
+        }
+        
+        .bar:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .bar:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        .bar:nth-child(4) {
+            animation-delay: 0.6s;
+        }
+        
+        .bar:nth-child(5) {
+            animation-delay: 0.8s;
+        }
+        
+        @keyframes audioWave {
+            0%, 100% {
+                height: 10px;
+            }
+            50% {
+                height: 30px;
+            }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <div class="absolute top-5 right-5">
+        <div id="serverStatus" class="hidden px-4 py-2 rounded-full shadow-lg backdrop-blur-sm bg-white/20">
+            <span id="statusText" class="text-white text-sm font-medium"><i class="fas fa-circle-notch fa-spin mr-2"></i>Checking server connection...</span>
+        </div>
+    </div>
+
+    <div class="relative w-full max-w-2xl bg-voice-light/90 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden">
+        <!-- Decorative elements -->
+        <div class="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-voice-blue/20"></div>
+        <div class="absolute -bottom-16 -left-16 w-40 h-40 rounded-full bg-voice-purple/20"></div>
+        
+        <div class="voice-wave py-8 px-6 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-voice-dark mb-2"><span class="text-voice-blue">Voice</span><span class="text-voice-purple">Canvas</span></h1>
+            <p class="text-voice-dark/70">Transform your speech into text effortlessly</p>
+        </div>
+        
+        <div class="p-6 md:p-8">
+            <!-- Recording Section -->
+            <div class="mb-8 text-center p-6 rounded-xl bg-white shadow-lg">
+                <button id="recordBtn" class="relative w-20 h-20 rounded-full bg-gradient-to-r from-voice-blue to-voice-purple text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center justify-center mx-auto mb-4" disabled>
+                    <i class="fas fa-microphone text-2xl"></i>
+                    <span class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-voice-pink hidden" id="recordingIndicator"></span>
+                </button>
+                
+                <div class="audio-wave mb-4 hidden" id="audioVisualizer">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+                
+                <div id="status" class="text-voice-dark/70 mb-2">Checking microphone permissions...</div>
+                <div id="timer" class="text-2xl font-bold text-voice-purple">00:00</div>
+                <div class="text-sm text-voice-dark/50 mt-2">Max recording time: 30 seconds</div>
+            </div>
+            
+            <!-- Divider -->
+            <div class="flex items-center my-8">
+                <div class="flex-grow border-t border-voice-dark/10"></div>
+                <span class="mx-4 text-voice-dark/40">or</span>
+                <div class="flex-grow border-t border-voice-dark/10"></div>
+            </div>
+            
+            <!-- Upload Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-voice-dark mb-4 text-center">Upload an audio file</h3>
+                
+                <div class="relative border-2 border-dashed border-voice-blue/30 rounded-xl p-8 text-center transition-colors hover:border-voice-blue/50 bg-white/50 mb-4">
+                    <input type="file" id="audioFile" accept="audio/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <i class="fas fa-cloud-upload-alt text-voice-blue text-4xl mb-3"></i>
+                    <p class="text-voice-dark/70">Drag & drop or click to select audio file</p>
+                    <p class="text-sm text-voice-dark/50 mt-2">Supports: MP3, WAV, WEBM (max 50MB)</p>
+                </div>
+                
+                <div id="audioInfo" class="text-center text-sm text-voice-dark/60 mb-4 hidden"></div>
+                
+                <button id="uploadBtn" class="w-full py-3 px-4 bg-gradient-to-r from-voice-purple to-voice-pink text-white rounded-xl font-medium shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i class="fas fa-wand-magic-sparkles mr-2"></i>Transcribe File
+                </button>
+            </div>
+            
+            <!-- Format Selection -->
+            <div class="mb-8 p-4 bg-white rounded-xl shadow">
+                <h3 class="text-lg font-semibold text-voice-dark mb-3 text-center">Audio Format Options</h3>
+                <div class="flex flex-col space-y-3">
+                    <div class="flex items-center">
+                        <input type="radio" id="formatWav" name="audioFormat" value="wav" class="mr-2 text-voice-blue focus:ring-voice-blue" checked>
+                        <label for="formatWav" class="text-voice-dark">WAV (Recommended - highest compatibility)</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="formatMp3" name="audioFormat" value="mp3" class="mr-2 text-voice-blue focus:ring-voice-blue">
+                        <label for="formatMp3" class="text-voice-dark">MP3 (Smaller file size)</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="formatWebm" name="audioFormat" value="webm" class="mr-2 text-voice-blue focus:ring-voice-blue">
+                        <label for="formatWebm" class="text-voice-dark">WebM (Original format)</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Result Section -->
+            <div>
+                <h3 class="text-lg font-semibold text-voice-dark mb-4 text-center flex items-center justify-center">
+                    <i class="fas fa-file-lines mr-2 text-voice-blue"></i>Transcription
+                </h3>
+                
+                <div class="relative">
+                    <div id="transcription" class="min-h-[150px] bg-white rounded-xl p-4 shadow-inner border border-voice-dark/10 text-voice-dark/80">
+                        <div class="h-full flex items-center justify-center text-voice-dark/40">
+                            <div class="text-center">
+                                <i class="fas fa-comment-dots text-3xl mb-2"></i>
+                                <p>Your transcription will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="loading" class="absolute inset-0 bg-white/80 rounded-xl flex flex-col items-center justify-center hidden">
+                        <div class="audio-wave mb-4">
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                            <div class="bar"></div>
+                        </div>
+                        <p class="text-voice-blue font-medium">Processing audio...</p>
+                    </div>
+                </div>
+                
+                <div class="mt-4 flex justify-end">
+                    <button id="copyBtn" class="py-2 px-4 bg-voice-dark/5 text-voice-dark/60 rounded-lg hover:bg-voice-dark/10 transition-colors hidden">
+                        <i class="fas fa-copy mr-2"></i>Copy Text
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="voice-wave py-4 text-center text-sm text-voice-dark/50">
+            Powered by Web Speech API • Made with <i class="fas fa-heart text-voice-pink"></i>
+        </div>
+    </div>
+
+    <!-- Include the audio encoder library -->
+    <script src="https://unpkg.com/lamejs@1.2.1/lame.min.js"></script>
+    
+    <script>
+        class SpeechToTextApp {
+            constructor() {
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.isRecording = false;
+                this.startTime = null;
+                this.timerInterval = null;
+                this.serverOnline = false;
+                this.microphoneAvailable = false;
+                this.audioContext = null;
+                
+                this.API_BASE = 'http://localhost:5000';
+                
+                this.initializeElements();
+                this.checkServerStatus();
+                this.checkMicrophonePermission();
+                this.bindEvents();
+            }
+            
+            initializeElements() {
+                this.recordBtn = document.getElementById('recordBtn');
+                this.status = document.getElementById('status');
+                this.timer = document.getElementById('timer');
+                this.audioFileInput = document.getElementById('audioFile');
+                this.uploadBtn = document.getElementById('uploadBtn');
+                this.transcriptionBox = document.getElementById('transcription');
+                this.loading = document.getElementById('loading');
+                this.serverStatus = document.getElementById('serverStatus');
+                this.statusText = document.getElementById('statusText');
+                this.audioInfo = document.getElementById('audioInfo');
+                this.audioVisualizer = document.getElementById('audioVisualizer');
+                this.recordingIndicator = document.getElementById('recordingIndicator');
+                this.copyBtn = document.getElementById('copyBtn');
+                this.formatOptions = document.getElementsByName('audioFormat');
+            }
+            
+            async checkServerStatus() {
+                try {
+                    const response = await fetch(`${this.API_BASE}/health`);
+                    if (response.ok) {
+                        this.serverOnline = true;
+                        this.serverStatus.className = 'px-4 py-2 rounded-full shadow-lg backdrop-blur-sm bg-green-500/80';
+                        this.statusText.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Server connected - Ready to transcribe';
+                        this.uploadBtn.disabled = false;
+                        
+                        // Enable record button if microphone is also available
+                        if (this.microphoneAvailable) {
+                            this.recordBtn.disabled = false;
+                        }
+                    } else {
+                        throw new Error('Server responded with error');
+                    }
+                } catch (error) {
+                    this.serverOnline = false;
+                    this.serverStatus.className = 'px-4 py-2 rounded-full shadow-lg backdrop-blur-sm bg-red-500/80';
+                    this.statusText.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Server offline - Please start the backend server';
+                    this.uploadBtn.disabled = true;
+                    
+                    // Only disable record button if server is required for recording
+                    // For true speech-to-text, we might not need the server for recording, only for processing
+                    // this.recordBtn.disabled = true;
+                }
+                this.serverStatus.classList.remove('hidden');
+            }
+            
+            async checkMicrophonePermission() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    this.microphoneAvailable = true;
+                    this.status.textContent = 'Ready to record';
+                    
+                    // Enable record button if server is also available
+                    if (this.serverOnline) {
+                        this.recordBtn.disabled = false;
+                    }
+                } catch (error) {
+                    this.microphoneAvailable = false;
+                    this.status.textContent = 'Microphone access denied or unavailable';
+                    this.recordBtn.disabled = true;
+                }
+            }
+            
+            bindEvents() {
+                this.recordBtn.addEventListener('click', () => this.toggleRecording());
+                this.uploadBtn.addEventListener('click', () => this.uploadFile());
+                this.audioFileInput.addEventListener('change', () => this.handleFileSelect());
+                this.copyBtn.addEventListener('click', () => this.copyTranscription());
+                
+                // Drag and drop for file upload
+                const dropArea = this.audioFileInput.parentElement;
+                dropArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropArea.classList.add('border-voice-blue');
+                });
+                
+                dropArea.addEventListener('dragleave', () => {
+                    dropArea.classList.remove('border-voice-blue');
+                });
+                
+                dropArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropArea.classList.remove('border-voice-blue');
+                    if (e.dataTransfer.files.length) {
+                        this.audioFileInput.files = e.dataTransfer.files;
+                        this.handleFileSelect();
+                    }
+                });
+            }
+            
+            handleFileSelect() {
+                const file = this.audioFileInput.files[0];
+                if (file) {
+                    const size = (file.size / 1024 / 1024).toFixed(2);
+                    this.audioInfo.textContent = `Selected: ${file.name} (${size} MB)`;
+                    this.audioInfo.classList.remove('hidden');
+                } else {
+                    this.audioInfo.classList.add('hidden');
+                }
+            }
+            
+            async toggleRecording() {
+                if (!this.isRecording) {
+                    await this.startRecording();
+                } else {
+                    this.stopRecording();
+                }
+            }
+            
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 16000,
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true
+                        } 
+                    });
+                    
+                    this.mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    this.mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                        
+                        // Convert to the selected format
+                        const selectedFormat = document.querySelector('input[name="audioFormat"]:checked').value;
+                        let convertedBlob = audioBlob;
+                        
+                        if (selectedFormat !== 'webm') {
+                            this.status.textContent = `Converting to ${selectedFormat.toUpperCase()}...`;
+                            convertedBlob = await this.convertAudioFormat(audioBlob, selectedFormat);
+                        }
+                        
+                        this.transcribeAudio(convertedBlob, selectedFormat);
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    this.mediaRecorder.start(1000);
+                    this.isRecording = true;
+                    this.startTime = Date.now();
+                    
+                    this.recordBtn.innerHTML = '<i class="fas fa-stop"></i>';
+                    this.recordingIndicator.classList.remove('hidden');
+                    this.audioVisualizer.classList.remove('hidden');
+                    this.status.textContent = 'Recording...';
+                    this.uploadBtn.disabled = true;
+                    
+                    this.startTimer();
+                    
+                    // Auto-stop after 30 seconds
+                    setTimeout(() => {
+                        if (this.isRecording) {
+                            this.stopRecording();
+                        }
+                    }, 30000);
+                    
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    this.showError('Could not access microphone. Please check permissions.');
+                }
+            }
+            
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    
+                    this.recordBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+                    this.recordingIndicator.classList.add('hidden');
+                    this.audioVisualizer.classList.add('hidden');
+                    this.status.textContent = 'Processing recording...';
+                    this.uploadBtn.disabled = false;
+                    
+                    this.stopTimer();
+                }
+            }
+            
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    this.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }, 1000);
+            }
+            
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+                this.timer.textContent = '00:00';
+            }
+            
+            async uploadFile() {
+                const file = this.audioFileInput.files[0];
+                if (!file) {
+                    this.showError('Please select an audio file');
+                    return;
+                }
+                
+                // Check file size (max 50MB)
+                if (file.size > 50 * 1024 * 1024) {
+                    this.showError('File too large. Please select a file smaller than 50MB.');
+                    return;
+                }
+                
+                // For uploaded files, we don't need to convert unless the server requires it
+                await this.transcribeAudio(file, this.getFileExtension(file.name));
+            }
+            
+            getFileExtension(filename) {
+                return filename.split('.').pop().toLowerCase();
+            }
+            
+            async convertAudioFormat(webmBlob, targetFormat) {
+                return new Promise((resolve, reject) => {
+                    if (targetFormat === 'wav') {
+                        this.convertToWav(webmBlob).then(resolve).catch(reject);
+                    } else if (targetFormat === 'mp3') {
+                        this.convertToMp3(webmBlob).then(resolve).catch(reject);
+                    } else {
+                        resolve(webmBlob); // Return original if format not recognized
+                    }
+                });
+            }
+            
+            async convertToWav(webmBlob) {
+                return new Promise((resolve, reject) => {
+                    // Create an audio context to decode the WebM data
+                    if (!this.audioContext) {
+                        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    
+                    // Create a file reader to read the WebM blob
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        try {
+                            // Decode the WebM data
+                            const audioBuffer = await this.audioContext.decodeAudioData(reader.result);
+                            
+                            // Convert to WAV
+                            const wavBlob = this.audioBufferToWav(audioBuffer);
+                            resolve(wavBlob);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(webmBlob);
+                });
+            }
+            
+            audioBufferToWav(buffer) {
+                const numChannels = buffer.numberOfChannels;
+                const sampleRate = buffer.sampleRate;
+                const format = 1; // PCM
+                const bitDepth = 16;
+                
+                const bytesPerSample = bitDepth / 8;
+                const blockAlign = numChannels * bytesPerSample;
+                
+                const wavBuffer = new ArrayBuffer(44 + buffer.length * blockAlign);
+                const view = new DataView(wavBuffer);
+                
+                // Write WAV header
+                this.writeString(view, 0, 'RIFF');
+                view.setUint32(4, 36 + buffer.length * blockAlign, true);
+                this.writeString(view, 8, 'WAVE');
+                this.writeString(view, 12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, format, true);
+                view.setUint16(22, numChannels, true);
+                view.setUint32(24, sampleRate, true);
+                view.setUint32(28, sampleRate * blockAlign, true);
+                view.setUint16(32, blockAlign, true);
+                view.setUint16(34, bitDepth, true);
+                this.writeString(view, 36, 'data');
+                view.setUint32(40, buffer.length * blockAlign, true);
+                
+                // Write audio data
+                let offset = 44;
+                for (let i = 0; i < buffer.length; i++) {
+                    for (let channel = 0; channel < numChannels; channel++) {
+                        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                        offset += 2;
+                    }
+                }
+                
+                return new Blob([wavBuffer], { type: 'audio/wav' });
+            }
+            
+            writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+            
+            async convertToMp3(webmBlob) {
+                return new Promise(async (resolve, reject) => {
+                    try {
+                        if (!this.audioContext) {
+                            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        }
+                        
+                        // First convert to WAV
+                        const wavBlob = await this.convertToWav(webmBlob);
+                        
+                        // Then convert WAV to MP3 using lamejs
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            try {
+                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                audioContext.decodeAudioData(reader.result).then((buffer) => {
+                                    const mp3Blob = this.encodeMp3(buffer);
+                                    resolve(mp3Blob);
+                                }).catch(reject);
+                            } catch (error) {
+                                reject(error);
+                            }
+                        };
+                        reader.onerror = reject;
+                        reader.readAsArrayBuffer(wavBlob);
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+            
+            encodeMp3(buffer) {
+                const numChannels = buffer.numberOfChannels;
+                const sampleRate = buffer.sampleRate;
+                const samples = buffer.getChannelData(0); // We'll use only the first channel for MP3
+                
+                const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
+                const sampleBlockSize = 1152;
+                const mp3Data = [];
+                
+                for (let i = 0; i < samples.length; i += sampleBlockSize) {
+                    const sampleChunk = samples.subarray(i, i + sampleBlockSize);
+                    const mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+                    if (mp3buf.length > 0) {
+                        mp3Data.push(mp3buf);
+                    }
+                }
+                
+                const mp3buf = mp3encoder.flush();
+                if (mp3buf.length > 0) {
+                    mp3Data.push(mp3buf);
+                }
+                
+                const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                return mp3Blob;
+            }
+            
+            async transcribeAudio(audioBlob, format = 'webm') {
+                this.showLoading(true);
+                this.status.textContent = 'Uploading and transcribing...';
+                this.recordBtn.disabled = true;
+                this.uploadBtn.disabled = true;
+                
+                try {
+                    const formData = new FormData();
+                    const filename = `audio.${format}`;
+                    formData.append('audio', audioBlob, filename);
+                    
+                    const response = await fetch(`${this.API_BASE}/transcribe`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.displayTranscription(result.transcription);
+                        this.status.textContent = `Transcription complete (${result.audio_duration?.toFixed(1)}s audio)`;
+                    } else {
+                        this.showError(result.error || 'Transcription failed');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error during transcription:', error);
+                    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                        this.showError('Cannot connect to server. Please make sure the backend is running on port 5000.');
+                    } else {
+                        this.showError('Network error. Please check your connection and try again.');
+                    }
+                } finally {
+                    this.showLoading(false);
+                    this.recordBtn.disabled = false;
+                    this.uploadBtn.disabled = false;
+                    this.status.textContent = 'Ready';
+                }
+            }
+            
+            displayTranscription(text) {
+                if (text && text.trim()) {
+                    this.transcriptionBox.innerHTML = `<div class="p-2">${text}</div>`;
+                    this.transcriptionBox.classList.remove('text-red-500', 'bg-red-50');
+                    this.copyBtn.classList.remove('hidden');
+                } else {
+                    this.transcriptionBox.innerHTML = '<div class="h-full flex items-center justify-center text-voice-dark/40"><div class="text-center"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>No speech detected or transcription empty</p></div></div>';
+                    this.copyBtn.classList.add('hidden');
+                }
+            }
+            
+            showError(message) {
+                this.transcriptionBox.innerHTML = `<div class="p-2 text-red-500">Error: ${message}</div>`;
+                this.copyBtn.classList.add('hidden');
+                this.status.textContent = 'Error occurred';
+            }
+            
+            showLoading(show) {
+                if (show) {
+                    this.loading.classList.remove('hidden');
+                } else {
+                    this.loading.classList.add('hidden');
+                }
+            }
+            
+            copyTranscription() {
+                const text = this.transcriptionBox.innerText;
+                navigator.clipboard.writeText(text).then(() => {
+                    // Show feedback
+                    const originalText = this.copyBtn.innerHTML;
+                    this.copyBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Copied!';
+                    setTimeout(() => {
+                        this.copyBtn.innerHTML = originalText;
+                    }, 2000);
+                });
+            }
+        }
+
+        // Initialize app when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new SpeechToTextApp();
+        });
+    </script>
+</body>
+</html>
